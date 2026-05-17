@@ -1,0 +1,27 @@
+# Secrets — NEVER commit
+.env
+src/.env
+
+# Data files (too large for git)
+data/
+models/
+plots/
+
+# Logs
+logs/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# Feast
+feature_store/data/
+*.db
+
+# IDE
+.vscode/
+.idea/
