@@ -11,7 +11,7 @@ from src.ingestion.base_client import BaseAPIClient
 from src.ingestion.data_normalizer import DataNormalizer
 from src.utils.logger import setup_logger
 
-logger = setup_logger("ingestion.api_clients.openweather")
+logger = setup_logger("ingestion.api_clients.open_meteo")
 
 
 class OpenMeteoClient(BaseAPIClient):

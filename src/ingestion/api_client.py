@@ -22,7 +22,7 @@ from src.utils.logger import setup_logger
 from src.ingestion.base_client import BaseAPIClient, CircuitBreaker
 from src.ingestion.schema_mapper import SchemaMapper
 from src.ingestion.api_clients.aqicn import AQICNClient
-from src.ingestion.api_clients.openweather import OpenMeteoClient
+from src.ingestion.api_clients.open_meteo import OpenMeteoClient
 
 logger = setup_logger("ingestion.api_client")
 
