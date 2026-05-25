@@ -50,6 +50,36 @@ class OpenMeteoClient(BaseAPIClient):
 
         return self._parse_response(response)
 
+    def fetch_historical_weather(self, start_date: str, end_date: str) -> Optional[Dict[str, Any]]:
+        """
+        Fetch historical weather data for Islamabad from Open-Meteo archive.
+        
+        Args:
+            start_date: YYYY-MM-DD format
+            end_date: YYYY-MM-DD format
+            
+        Returns:
+            Dict with hourly timeseries data (can contain thousands of rows)
+        """
+        params = {
+            "latitude": self.lat,
+            "longitude": self.lon,
+            "start_date": start_date,
+            "end_date": end_date,
+            "hourly": self.hourly_params,
+            "timezone": "Asia/Karachi",
+        }
+        
+        response = self._make_request(self.archive_url, params)
+        if response is None:
+            logger.error(f"[OpenMeteo] Failed to fetch historical data ({start_date} to {end_date})")
+            return None
+        
+        logger.info(
+            f"[OpenMeteo] Historical fetch succeeded: {start_date} to {end_date}"
+        )
+        return response
+
     def _parse_response(self, response: Dict) -> Optional[Dict[str, Any]]:
         """Extract hourly reading from Open-Meteo JSON using config mappings."""
         parsed = self.normalizer.normalize_open_meteo(response)

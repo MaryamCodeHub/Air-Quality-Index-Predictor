@@ -102,7 +102,15 @@ def run_feature_pipeline(config: Dict[str, Any], clean_df: pd.DataFrame) -> pd.D
     if featured.empty:
         return featured
 
-    featured = featured.fillna(0)
+    # Fill NaN carefully: numeric columns with 0, object/string columns with empty string
+    numeric_cols = featured.select_dtypes(include=[np.number]).columns
+    object_cols = featured.select_dtypes(include=['object']).columns
+    
+    for col in numeric_cols:
+        featured[col] = featured[col].fillna(0)
+    for col in object_cols:
+        featured[col] = featured[col].fillna('')
+    
     path = os.path.join(config["paths"]["processed_data"], "processed_aqi_data.parquet")
     featured.to_parquet(path, index=False)
     logger.info(f"Processed data saved → {path} ({len(featured)} rows)")

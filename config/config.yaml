@@ -43,6 +43,13 @@ resilience:
     failure_threshold: 5
     cooldown_seconds: 300
 
+# --- Hopsworks Feature Store (Cloud-based) ---
+hopsworks:
+  project_name: "aqi_forecasting"
+  host: "https://us-east-1.app.hopsworks.ai"
+  # API key loaded from .env → HOPSWORKS_API_KEY
+  # If not set, features will use Parquet fallback (local storage)
+
 # --- Feature Engineering ---
 features:
   rolling_windows: [6, 12, 24]

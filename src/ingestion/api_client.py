@@ -3,13 +3,14 @@ API Client Module — Single-City (Islamabad)
 ============================================
 Production-grade API clients orchestrator for AQICN and Open-Meteo.
 Wraps resilience patterns and exposes standard interfaces.
+Real data only: No synthetic AQI generation.
 """
 
 import json
 import os
 import time
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Dict, Optional
 
 import pandas as pd
@@ -29,11 +30,16 @@ logger = setup_logger("ingestion.api_client")
 
 # ============================================================
 # Unified Ingestion Pipeline — Islamabad Only
+# Real data from AQICN API + Open-Meteo API
 # ============================================================
 
 class DataIngestionPipeline:
     """
     Orchestrates data collection for Islamabad from both APIs.
+
+    Real data sources:
+    - AQICN API: Real-time AQI + pollutants
+    - Open-Meteo API: Real-time + historical weather (free, no auth required)
 
     Graceful degradation: if one API fails, the pipeline still
     produces a partial record from the other.
@@ -67,18 +73,18 @@ class DataIngestionPipeline:
             DataFrame of all raw records (including historical appends)
         """
         logger.info("=" * 60)
-        logger.info("DATA INGESTION — Islamabad")
+        logger.info("DATA INGESTION — Islamabad (Real Data Only)")
         logger.info("=" * 60)
 
         record: Dict[str, Any] = {}
 
-        # Fetch AQI
+        # Fetch AQI from AQICN (real-time)
         if self.aqicn_client:
             aqi_data = self.aqicn_client.fetch_aqi()
             if aqi_data:
                 record.update(aqi_data)
 
-        # Fetch weather
+        # Fetch weather from Open-Meteo (real-time, free)
         if self.weather_client:
             weather_data = self.weather_client.fetch_weather()
             if weather_data:
@@ -99,15 +105,24 @@ class DataIngestionPipeline:
 
         # Append to existing raw Parquet
         raw_path = os.path.join(self.config["paths"]["raw_data"], "raw_aqi_data.parquet")
+        
+        # Ensure timestamp is datetime for consistency
+        if "timestamp" in new_df.columns:
+            new_df["timestamp"] = pd.to_datetime(new_df["timestamp"], errors='coerce')
+        
         if os.path.exists(raw_path):
             existing = pd.read_parquet(raw_path)
+            # Ensure timestamps match type
+            if "timestamp" in existing.columns:
+                existing["timestamp"] = pd.to_datetime(existing["timestamp"], errors='coerce')
             merged = pd.concat([existing, new_df], ignore_index=True)
-            logger.info(f"Appended — total {len(merged)} raw records")
+            logger.info(f"✓ Appended — total {len(merged)} raw records")
         else:
             merged = new_df
-            logger.info("Created new raw data file — 1 record")
+            logger.info("✓ Created new raw data file — 1 record")
 
         merged.to_parquet(raw_path, index=False)
-        logger.info(f"Raw data saved → {raw_path}")
-        logger.info("DATA INGESTION — COMPLETE")
+        logger.info(f"✓ Raw data saved → {raw_path}")
+        logger.info("✓ DATA INGESTION — COMPLETE")
         return merged
+

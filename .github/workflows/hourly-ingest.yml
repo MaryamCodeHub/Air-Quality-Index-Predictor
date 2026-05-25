@@ -1,0 +1,84 @@
+name: Hourly Data Ingestion
+
+on:
+  schedule:
+    # Run every hour at :00 UTC
+    - cron: '0 * * * *'
+  workflow_dispatch:  # Allow manual triggering from GitHub UI
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      
+      - name: Run real data ingestion
+        env:
+          AQICN_API_KEY: ${{ secrets.AQICN_API_KEY }}
+        run: |
+          python run.py ingest
+      
+      - name: Engineer and push features
+        env:
+          HOPSWORKS_API_KEY: ${{ secrets.HOPSWORKS_API_KEY }}
+        run: |
+          python run.py features
+      
+      - name: Check if sufficient data for training
+        id: check_data
+        run: |
+          python -c "
+          import pandas as pd
+          import os
+          
+          proc_path = 'data/processed/processed_aqi_data.parquet'
+          if os.path.exists(proc_path):
+              df = pd.read_parquet(proc_path)
+              rows = len(df)
+              print(f'Found {rows} processed records')
+              if rows >= 50:
+                  print('::set-output name=train::true')
+              else:
+                  print(f'Not enough data: {rows} < 50. Skipping training.')
+          else:
+              print('No processed data file found')
+          "
+      
+      - name: Train models (if sufficient data)
+        if: steps.check_data.outputs.train == 'true'
+        run: |
+          python run.py train
+      
+      - name: Commit and push data (audit trail)
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add data/raw/raw_aqi_data.parquet data/processed/processed_aqi_data.parquet models/ -f
+          git diff --quiet && git diff --staged --quiet || (
+            git commit -m "chore: hourly data ingestion and feature engineering [$(date -u +'%Y-%m-%d %H:%M:%S %Z')]" && \
+            git push
+          ) || echo "Nothing to commit"
+      
+      - name: Workflow summary
+        if: always()
+        run: |
+          echo "### Data Ingestion Summary" >> $GITHUB_STEP_SUMMARY
+          echo "⏰ Timestamp: $(date -u +'%Y-%m-%d %H:%M:%S %Z')" >> $GITHUB_STEP_SUMMARY
+          echo "📍 City: Islamabad, Pakistan" >> $GITHUB_STEP_SUMMARY
+          echo "✓ Real data from AQICN API + OpenMeteo API" >> $GITHUB_STEP_SUMMARY
+          if [ -f data/processed/processed_aqi_data.parquet ]; then
+            ROWS=$(python -c "import pandas as pd; print(len(pd.read_parquet('data/processed/processed_aqi_data.parquet')))")
+            echo "📊 Processed records: $ROWS" >> $GITHUB_STEP_SUMMARY
+          fi

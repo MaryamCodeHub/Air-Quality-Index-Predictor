@@ -18,10 +18,22 @@ __pycache__/
 dist/
 build/
 
-# Feast
-feature_store/data/
+# Feast (being replaced by Hopsworks)
+/feature_store/
 *.db
 
 # IDE
 .vscode/
 .idea/
+
+# AI-generated documentation (local reference only)
+AUDIT_*.md
+COLAB_*.md
+COLAB_*.py
+COMPLETION_*.md
+DEVELOPER_GUIDE.md
+MIGRATION_COMPLETE.md
+OPERATOR_RUNBOOK.md
+QUICK_REFERENCE.md
+verify_migration.sh
+COLAB_TRAINING_NOTEBOOK.py
