@@ -2,9 +2,17 @@
 .env
 src/.env
 
-# Data files (too large for git)
-data/
+# Data files — selective tracking for historical AQI parquet datasets
+# Only ignore cache and feast, allow parquet filgit push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git masteres
+data/cache/
+data/feast/
+
+# Models — do NOT track trained models
 models/
+!models/
+!models/.gitkeep
+
+# Plots
 plots/
 
 # Logs
