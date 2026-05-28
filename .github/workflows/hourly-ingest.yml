@@ -10,9 +10,15 @@ jobs:
   ingest:
     runs-on: ubuntu-latest
     
+    permissions:
+      contents: write
+    
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+          fetch-depth: 0
       
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -61,15 +67,14 @@ jobs:
         run: |
           python run.py train
       
-      - name: Commit and push data (audit trail)
+      - name: Commit and push data
         run: |
-          git config user.name "GitHub Actions"
-          git config user.email "actions@github.com"
-          git add data/raw/raw_aqi_data.parquet data/processed/processed_aqi_data.parquet models/ -f
-          git diff --quiet && git diff --staged --quiet || (
-            git commit -m "chore: hourly data ingestion and feature engineering [$(date -u +'%Y-%m-%d %H:%M:%S %Z')]" && \
-            git push
-          ) || echo "Nothing to commit"
+          git config user.name "GitHub Actions Bot"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          git add data/raw/raw_aqi_data.parquet data/processed/processed_aqi_data.parquet
+          git commit -m "data: AQI parquet update only" || echo "No changes to commit"
+          git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git master
       
       - name: Workflow summary
         if: always()
