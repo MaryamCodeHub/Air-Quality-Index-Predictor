@@ -2,9 +2,7 @@ name: Hourly Data Ingestion
 
 on:
   schedule:
-    # Run every 1 hour exactly
-    # 0 = At minute 0 (start of every hour)
-    # * * * * = Every day, every month, every weekday
+    # Run every hour at minute 0 UTC
     - cron: '0 * * * *'
   workflow_dispatch:  # Allow manual triggering from GitHub UI
 
@@ -21,6 +19,11 @@ jobs:
         with:
           persist-credentials: true
           fetch-depth: 0
+      
+      - name: Log workflow start time
+        run: |
+          echo "🚀 Workflow started at: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+          echo "Event: ${{ github.event_name }}"
       
       - name: Set up Python
         uses: actions/setup-python@v4
