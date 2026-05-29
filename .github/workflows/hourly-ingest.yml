@@ -2,7 +2,9 @@ name: Hourly Data Ingestion
 
 on:
   schedule:
-    # Run every hour at :00 UTC
+    # Run every 1 hour exactly
+    # 0 = At minute 0 (start of every hour)
+    # * * * * = Every day, every month, every weekday
     - cron: '0 * * * *'
   workflow_dispatch:  # Allow manual triggering from GitHub UI
 
