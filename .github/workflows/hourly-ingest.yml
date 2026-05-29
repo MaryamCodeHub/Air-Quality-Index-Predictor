@@ -5,7 +5,9 @@ on:
     # Run every hour at minute 0 UTC
     - cron: '0 * * * *'
   workflow_dispatch:  # Allow manual triggering from GitHub UI
+  push: 
 
+  
 jobs:
   ingest:
     runs-on: ubuntu-latest
