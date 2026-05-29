@@ -12,7 +12,7 @@ requests>=2.31.0
 
 # --- Feature Store ---
 feast>=0.35.0
-hopsworks>=3.0.0  # [TEMPORARILY DISABLED] Requires C++ build tools. Project uses Parquet fallback. Install separately after account setup: pip install hopsworks
+hopsworks>=3.0.0
 
 # --- ML Models ---
 scikit-learn>=1.3.0
