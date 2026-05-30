@@ -48,9 +48,9 @@ def cmd_ingest(config):
 
 
 def cmd_features(config):
-    """Push engineered features to Hopsworks feature store."""
+    """Push engineered features to Feast (primary) and Hopsworks (optional)."""
     import pandas as pd
-    from src.feature_store import HopsworksConnector
+    from src.feature_store.feast_integration import FeastIntegration
     
     # Load processed data
     proc_path = os.path.join(config["paths"]["processed_data"], "processed_aqi_data.parquet")
@@ -59,49 +59,115 @@ def cmd_features(config):
         return
     
     df = pd.read_parquet(proc_path)
+    logger.info(f"Loaded {len(df)} processed records for feature store")
     
-    # Add city entity for Hopsworks
-    df["city"] = config.get("city", {}).get("id", "islamabad")
-    
-    # Ensure timestamp is datetime
-    if "timestamp" in df.columns:
-        df["timestamp"] = pd.to_datetime(df["timestamp"])
-    
-    logger.info(f"Pushing {len(df)} feature rows to Hopsworks")
-    
-    # Initialize Hopsworks connector
-    connector = HopsworksConnector(config)
-    status = connector.get_feature_store_status()
-    
-    if not status["connected"]:
-        logger.warning(
-            "Hopsworks not connected (HOPSWORKS_API_KEY not set in .env). "
-            "Features are stored locally only (Parquet). "
-            "To enable Hopsworks: "
-            "1. Create account at hopsworks.ai\n"
-            "2. Create project 'aqi_forecasting'\n"
-            "3. Add API key to .env as HOPSWORKS_API_KEY"
-        )
+    # ===== FEAST INTEGRATION (Primary) =====
+    try:
+        logger.info("▶ Pushing features to Feast feature store...")
+        feast = FeastIntegration(repo_path="feature_store")
+        
+        # Split raw vs engineered features
+        raw_cols = {"timestamp", "aqi", "pm25", "pm10", "temp", "humidity", "wind_speed"}
+        raw_df = df[[col for col in df.columns if col in raw_cols]]
+        
+        # Ingest and register all features
+        feast_result = feast.ingest_and_register(raw_df=raw_df, engineered_df=df)
+        logger.info(f"✅ Feast integration complete")
+        logger.info(f"   - Raw features registered: {feast_result['step_1_raw_registration']}")
+        logger.info(f"   - Engineered features registered: {feast_result['step_2_engineered_registration']}")
+        logger.info(f"   - Materialization: {feast_result['step_3_materialization']}")
+        
+        # Export feature manifest for governance
+        feast.export_feature_manifest()
+        
+    except Exception as e:
+        logger.error(f"Feast integration error: {e}")
         return
     
-    # Push features to Hopsworks (24h feature group)
-    success = connector.push_features(
-        df=df,
-        feature_group_name="aqi_features_24h",
-        version=1,
-        primary_key=["city", "timestamp"],
-        event_time="timestamp",
-    )
+    # ===== HOPSWORKS INTEGRATION (Optional) =====
+    try:
+        from src.feature_store.hopsworks_connector import HopsworksConnector
+        
+        logger.info("▶ Checking Hopsworks connection...")
+        connector = HopsworksConnector(config)
+        status = connector.get_feature_store_status()
+        
+        if status["connected"]:
+            # Add city entity for Hopsworks
+            df["city"] = config.get("city", {}).get("id", "islamabad")
+            if "timestamp" in df.columns:
+                df["timestamp"] = pd.to_datetime(df["timestamp"])
+            
+            # Push to Hopsworks
+            success = connector.push_features(
+                df=df,
+                feature_group_name="aqi_features_24h",
+                version=1,
+                primary_key=["city", "timestamp"],
+                event_time="timestamp",
+            )
+            
+            if success:
+                logger.info(f"✅ Features successfully pushed to Hopsworks")
+            else:
+                logger.warning("Hopsworks push returned false, but Feast succeeded")
+        else:
+            logger.info("ℹ Hopsworks not available (optional). Feast primary store active.")
     
-    if success:
-        logger.info(f"✓ Features successfully pushed to Hopsworks")
-    else:
-        logger.error("Failed to push features to Hopsworks")
+    except Exception as e:
+        logger.warning(f"Hopsworks integration skipped: {e}. Feast is primary.")
 
 
 def cmd_materialize(config):
-    """Push features to Hopsworks (alias for cmd_features for backward compatibility)."""
+    """Push features to Feast (primary) and optionally Hopsworks."""
     cmd_features(config)
+
+
+def cmd_feast(config):
+    """Feast-specific operations: status, manifest, health check."""
+    from src.feature_store.feast_integration import FeastIntegration
+    
+    feast = FeastIntegration(repo_path="feature_store")
+    
+    logger.info("▶ Feast Feature Store Operations")
+    logger.info("=" * 60)
+    
+    # Health check
+    health = feast.health_check()
+    logger.info(f"Health Status: {health['overall_status'].upper()}")
+    logger.info(f"  - Store: {health['store_health']['status']}")
+    logger.info(f"  - Registered feature views: {health['registry_stats']['num_registered_views']}")
+    logger.info(f"  - Materialized: {health['latest_materialization']}")
+    
+    # Feature statistics
+    logger.info("\n▶ Feature Registry Statistics")
+    logger.info(f"  - Total features: {health['registry_stats']['total_features']}")
+    for category, count in health['registry_stats']['by_category'].items():
+        logger.info(f"    {category}: {count}")
+    
+    # Feature quality report
+    quality = feast.feature_quality_report()
+    if quality.get("status") != "no_data":
+        logger.info("\n▶ Feature Quality Report")
+        logger.info(f"  - Total features: {quality['total_features']}")
+        logger.info(f"  - Records: {quality['total_records']}")
+        
+        missing = quality['quality_checks']['missing_values']
+        if missing['columns_with_missing']:
+            logger.warning(f"  ⚠ Columns with missing values: {len(missing['columns_with_missing'])}")
+        logger.info(f"  - Max missing %: {missing['max_missing_pct']:.2f}%")
+        
+        freshness = quality['quality_checks']['freshness']
+        if freshness.get('is_fresh'):
+            logger.info(f"  ✓ Data is fresh (age: {freshness.get('age_hours', 0):.1f}h)")
+        else:
+            logger.warning(f"  ⚠ Data is stale (age: {freshness.get('age_hours', 0):.1f}h)")
+    
+    logger.info("\nℹ Feast is now your primary feature store (local Parquet backend)")
+    logger.info("  - For cloud deployment: Feast supports S3, GCS, Azure, Snowflake, BigQuery")
+    logger.info("  - Feature retrieval: FeastIntegration.get_features_for_training()")
+    logger.info("  - Inference: FeastIntegration.get_features_for_inference()")
+
 
 
 def cmd_train(config):
@@ -169,6 +235,7 @@ COMMANDS = {
     "ingest": cmd_ingest,
     "features": cmd_features,
     "materialize": cmd_materialize,
+    "feast": cmd_feast,
     "train": cmd_train,
     "explain": cmd_explain,
     "drift": cmd_drift,
@@ -184,8 +251,9 @@ def main():
         epilog="""
 Commands:
   ingest        Fetch live AQICN + weather data, clean, engineer features
-  features      Push engineered features to Hopsworks feature store
+  features      Push engineered features to Feast (primary) + Hopsworks (optional)
   materialize   Alias for features (backward compatibility)
+  feast         Feast feature store status, quality reports, health checks
   train         Train forecasting models (Ridge, RF, XGBoost × 3 horizons)
   explain       Generate SHAP model explanations
   drift         Run distribution drift detection
@@ -194,7 +262,8 @@ Commands:
 
 Examples:
   python run.py ingest                      # Fetch real data from APIs
-  python run.py features                    # Push to Hopsworks
+  python run.py features                    # Push to Feast + optional Hopsworks
+  python run.py feast                       # Feature store status & health
   python run.py train                       # Train 9 models
   python run.py serve & python run.py dashboard  # Both services
         """,
