@@ -4,8 +4,8 @@ Model Registry
 Handles saving, loading, and tracking trained models with metadata.
 
 Each model is saved as:
-  models/{model_name}_{horizon}h.joblib   — serialized model
-  models/{model_name}_{horizon}h.json     — metadata (metrics, features, timestamp)
+  artifacts/models/{model_name}_{horizon}h.joblib   — serialized model
+  artifacts/models/{model_name}_{horizon}h.json     — metadata (metrics, features, timestamp)
 """
 
 import os

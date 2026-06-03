@@ -2,21 +2,27 @@
 .env
 src/.env
 
-# Data files — selective tracking for historical AQI parquet datasets
-# Only ignore cache and feast, allow parquet filgit push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git masteres
+# Virtual environments
+.venv/
+.venv-*/
+venv/
+
+# Data — cache and feast runtime only
 data/cache/
 data/feast/
 
-# Models — do NOT track trained models
-models/
-!models/
-!models/.gitkeep
+# Backups (local only)
+data_backup/
+models_backup/
 
-# Plots
+# Model artifacts — do NOT track trained models
+artifacts/models/
+!artifacts/models/.gitkeep
+
+# Runtime outputs
+artifacts/logs/
 plots/
-
-# Logs
-logs/
+docs/reports/*.json
 
 # Python
 __pycache__/
@@ -25,23 +31,12 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+.pytest_cache/
 
-# Feast (being replaced by Hopsworks)
+# Feast local registry DB
 /feature_store/
 *.db
 
 # IDE
 .vscode/
 .idea/
-
-# AI-generated documentation (local reference only)
-AUDIT_*.md
-COLAB_*.md
-COLAB_*.py
-COMPLETION_*.md
-DEVELOPER_GUIDE.md
-MIGRATION_COMPLETE.md
-OPERATOR_RUNBOOK.md
-QUICK_REFERENCE.md
-verify_migration.sh
-COLAB_TRAINING_NOTEBOOK.py

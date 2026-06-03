@@ -14,7 +14,7 @@ import yaml
 from dotenv import load_dotenv
 
 
-def load_config(config_path: str = "config/config.yaml") -> Dict[str, Any]:
+def load_config(config_path: str = "configs/config.yaml") -> Dict[str, Any]:
     """
     Load YAML config and inject secrets from .env file.
 

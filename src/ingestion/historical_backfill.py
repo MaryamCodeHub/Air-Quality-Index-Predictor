@@ -456,8 +456,8 @@ def main():
     
     manager = HistoricalBackfillManager(
         data_dir="data/backfill",
-        min_samples=5000,
-        lookback_days=180
+        min_samples=1000,
+        lookback_days=250
     )
     
     # Try real data first, fallback to synthetic

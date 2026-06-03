@@ -12,7 +12,7 @@ from datetime import datetime
 import yaml
 
 
-def setup_logger(name: str, config_path: str = "config/config.yaml") -> logging.Logger:
+def setup_logger(name: str, config_path: str = "configs/config.yaml") -> logging.Logger:
     """
     Create and configure a logger instance.
 

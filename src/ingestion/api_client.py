@@ -63,7 +63,7 @@ class DataIngestionPipeline:
             logger.error(f"OpenMeteo client init failed: {exc}")
 
         if self.aqicn_client is None and self.weather_client is None:
-            raise ValueError("Both API clients failed. Check config/config.yaml")
+            raise ValueError("Both API clients failed. Check configs/config.yaml")
 
     def run(self) -> pd.DataFrame:
         """

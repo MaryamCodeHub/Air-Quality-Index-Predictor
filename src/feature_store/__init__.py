@@ -1,5 +1,7 @@
-"""Feature Store Integration — Hopsworks Cloud."""
+"""Feature Store Integration — Feast (Primary) + Parquet (Emergency Fallback)."""
 
-from src.feature_store.hopsworks_connector import HopsworksConnector
+from src.feature_store.feast_integration import FeastIntegration
+from src.feature_store.feast_store import AQIFeastStore
+from src.feature_store.feature_registry import get_registry
 
-__all__ = ["HopsworksConnector"]
+__all__ = ["FeastIntegration", "AQIFeastStore", "get_registry"]

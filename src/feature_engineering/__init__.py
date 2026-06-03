@@ -1,4 +1,4 @@
-"""Backward-compatible re-exports; implementation lives in feature_engineering."""
+"""Feature engineering package."""
 
 from src.feature_engineering.feature_engineer import FeatureEngineer, run_feature_pipeline
 

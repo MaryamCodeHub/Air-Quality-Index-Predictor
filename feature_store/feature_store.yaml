@@ -1,0 +1,9 @@
+project: aqi_islamabad
+registry: data/feast/registry.pb
+provider: local
+offline_store:
+  type: file
+online_store:
+  type: sqlite
+  path: data/feast/online_store.db
+entity_key_serialization_version: 3

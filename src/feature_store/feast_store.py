@@ -6,12 +6,13 @@ Feast Feature Store Integration for AQI Forecasting
 - Online/Offline Split: Supports both online and offline serving
 
 Author: AQI Team
-Date: May 2026
+Date: June 2026
 """
 
 import os
 import json
 import logging
+import subprocess
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -21,13 +22,8 @@ from feast import (
     FeatureStore, 
     FeatureView, 
     Entity, 
-    Feature,
     ValueType,
-    FeatureService,
 )
-from feast.data_source import PandasDataSource, ParquetSource
-from feast.repo_config import RepoConfig
-
 
 logger = logging.getLogger(__name__)
 
@@ -66,122 +62,48 @@ class AQIFeastStore:
         logger.info(f"✅ Feast Feature Store initialized at {self.repo_path}")
     
     def _initialize_store(self):
-        """Initialize Feast store with SQLite backend (local development)."""
+        """Initialize Feast store with local SQLite/file backend."""
         try:
-            # For production, this would point to cloud storage (S3, GCS, Azure)
             self.store = FeatureStore(repo_path=str(self.repo_path))
-            logger.info("✅ Feast store initialized")
+            logger.info("✅ Standard Feast store initialized successfully")
         except Exception as e:
-            logger.warning(f"Feast initialization: {e}. Creating new store...")
-            # Will be created on first apply
-    
+            logger.error(f"❌ Failed standard Feast initialization: {e}")
+            
     def register_raw_features(self, df: pd.DataFrame) -> Dict:
         """
-        Register raw AQI/weather features in Feast.
-        
-        Features registered:
-        - aqi: Air Quality Index (main target)
-        - pm25: PM2.5 concentration
-        - pm10: PM10 concentration
-        - temp: Temperature
-        - humidity: Relative humidity
-        - wind_speed: Wind speed
-        - timestamp: Feature timestamp
-        - location_id: Location identifier (Islamabad)
-        
-        Args:
-            df: DataFrame with columns [timestamp, aqi, pm25, pm10, temp, humidity, wind_speed]
-            
-        Returns:
-            Dictionary with registration status
+        Register raw AQI/weather features in Feast metadata registry.
+        (Features themselves are statically configured in features.py).
         """
-        logger.info("📝 Registering raw features in Feast...")
-        
-        # Define Entity: Location (Islamabad)
-        location = Entity(
-            name="location",
-            description="Geographic location (Islamabad, Pakistan)",
-            value_type=ValueType.STRING,
-        )
-        
-        # Define raw feature view
-        raw_features = FeatureView(
-            name="aqi_raw_features",
-            entities=["location"],
-            features=[
-                Feature(name="aqi", dtype=ValueType.FLOAT),
-                Feature(name="pm25", dtype=ValueType.FLOAT),
-                Feature(name="pm10", dtype=ValueType.FLOAT),
-                Feature(name="temp", dtype=ValueType.FLOAT),
-                Feature(name="humidity", dtype=ValueType.FLOAT),
-                Feature(name="wind_speed", dtype=ValueType.FLOAT),
-            ],
-            online=True,
-            description="Raw AQI and weather sensor data",
-            ttl=timedelta(days=30),  # Keep 30 days in online store
-        )
+        logger.info("📝 Logging raw features schema info...")
         
         result = {
             "status": "registered",
-            "entity": location.name,
-            "view": raw_features.name,
-            "features": len(raw_features.features),
+            "entity": "city",
+            "view": "aqi_raw_features",
+            "features": 6,
             "timestamp": datetime.now().isoformat()
         }
         
         self.metadata["features_registered"].append(result)
-        logger.info(f"✅ Registered {len(raw_features.features)} raw features")
-        
+        logger.info("✅ Loged raw features schema info")
         return result
     
     def register_engineered_features(self, df: pd.DataFrame) -> Dict:
         """
-        Register engineered features in Feast.
-        
-        Features registered (60+ features):
-        - Lag Features (18): 1h, 2h, 6h, 24h, 48h, 168h for AQI, PM2.5, PM10
-        - Rolling Statistics (18): 3h, 6h, 24h windows (mean, std, min, max)
-        - Cyclical (6): hour_sin/cos, day_sin/cos, month_sin/cos
-        - Temporal Binary (2): is_weekend, is_rush_hour
-        - Meteorological (4): temp_normalized, humidity_normalized, stability, pm_ratio
-        - Interactions (8): dispersion, momentum, thermal_humidity, accumulation, changes
-        - Seasonal (2-4): trend, seasonal decomposition
-        
-        Args:
-            df: DataFrame with engineered features
-            
-        Returns:
-            Dictionary with registration status
+        Register engineered features in Feast metadata registry.
+        (Features themselves are statically configured in features.py).
         """
-        logger.info("📝 Registering engineered features in Feast...")
-        
-        # Extract engineered feature columns (exclude raw features)
-        raw_cols = {"timestamp", "aqi", "pm25", "pm10", "temp", "humidity", "wind_speed", "location_id"}
-        engineered_cols = [col for col in df.columns if col not in raw_cols]
-        
-        # Define engineered feature view
-        engineered_features = FeatureView(
-            name="aqi_engineered_features",
-            entities=["location"],
-            features=[
-                Feature(name=col, dtype=ValueType.FLOAT) 
-                for col in engineered_cols[:30]  # Feast limit per view
-            ],
-            online=True,
-            description="Engineered features: lags, rolling stats, cyclical, interactions",
-            ttl=timedelta(days=30),
-        )
+        logger.info("📝 Logging engineered features schema info...")
         
         result = {
             "status": "registered",
-            "view": engineered_features.name,
-            "features": len(engineered_features.features),
+            "view": "aqi_engineered_features",
+            "features": 30,
             "timestamp": datetime.now().isoformat()
         }
         
         self.metadata["features_registered"].append(result)
-        logger.info(f"✅ Registered {len(engineered_features.features)} engineered features")
-        
+        logger.info("✅ Loged engineered features schema info")
         return result
     
     def materialize_features(
@@ -191,9 +113,7 @@ class AQIFeastStore:
         end_date: Optional[datetime] = None
     ) -> Dict:
         """
-        Materialize features to offline store (Parquet).
-        
-        Materialization stores feature snapshots for training data consistency.
+        Materialize features to both Feast online store (SQLite) and offline Parquet backup.
         
         Args:
             df: Feature DataFrame
@@ -203,13 +123,32 @@ class AQIFeastStore:
         Returns:
             Dictionary with materialization status
         """
-        logger.info("💾 Materializing features to offline store...")
+        logger.info("💾 Materializing features to Feast offline and online stores...")
         
-        # Create materialization metadata
+        # 1. Run 'feast apply' via subprocess to make sure definitions are applied
+        try:
+            logger.info("Running 'feast apply' to register features.py definitions...")
+            res = subprocess.run(["feast", "apply"], cwd=str(self.repo_path), check=True, capture_output=True, text=True)
+            logger.info(f"Feast apply output:\n{res.stdout}")
+        except Exception as e:
+            logger.error(f"Failed to run 'feast apply': {e}")
+            
+        # 2. Re-initialize Feast store to pick up any changes
+        self._initialize_store()
+        
+        # 3. Call standard materialize_incremental to SQLite online store
+        try:
+            m_end = end_date if end_date else datetime.now()
+            logger.info(f"Running store.materialize_incremental up to {m_end}...")
+            self.store.materialize_incremental(end_date=m_end)
+            logger.info("✅ Feast online store materialization completed successfully")
+        except Exception as e:
+            logger.error(f"❌ Failed standard Feast materialization: {e}")
+        
+        # 4. Save features to custom Parquet backup directory (for backward compatibility)
         materialization_dir = self.repo_path / "materializations" / datetime.now().strftime("%Y%m%d_%H%M%S")
         materialization_dir.mkdir(parents=True, exist_ok=True)
         
-        # Save features to Parquet
         feature_path = materialization_dir / "features.parquet"
         df.to_parquet(feature_path)
         
@@ -218,8 +157,8 @@ class AQIFeastStore:
             "materialization_id": datetime.now().isoformat(),
             "num_records": len(df),
             "num_features": len(df.columns),
-            "start_date": start_date.isoformat() if start_date else df['timestamp'].min().isoformat(),
-            "end_date": end_date.isoformat() if end_date else df['timestamp'].max().isoformat(),
+            "start_date": start_date.isoformat() if start_date else df['timestamp'].min().isoformat() if 'timestamp' in df.columns and len(df) > 0 else datetime.now().isoformat(),
+            "end_date": end_date.isoformat() if end_date else df['timestamp'].max().isoformat() if 'timestamp' in df.columns and len(df) > 0 else datetime.now().isoformat(),
             "feature_path": str(feature_path),
             "columns": df.columns.tolist()
         }
@@ -229,86 +168,166 @@ class AQIFeastStore:
             json.dump(metadata, f, indent=2)
         
         self.metadata["materializations"].append(metadata)
-        
-        logger.info(f"✅ Materialized {len(df)} records with {len(df.columns)} features")
+        logger.info(f"✅ Parquet materialization backup saved to {feature_path}")
         
         return metadata
     
     def get_offline_features(
         self,
         locations: List[str] = ["islamabad"],
-        num_days: int = 7
+        num_days: int = 30
     ) -> pd.DataFrame:
         """
-        Retrieve features for offline training from materialized store.
+        Retrieve features for offline training using Feast's get_historical_features.
         
         Args:
-            locations: List of location IDs
+            locations: List of location IDs (entities)
             num_days: Number of days to retrieve
             
         Returns:
             DataFrame with offline features
         """
-        logger.info(f"📂 Retrieving offline features for last {num_days} days...")
+        logger.info(f"📂 Retrieving offline features via Feast for last {num_days} days...")
         
-        # Find latest materialization
-        materializations_dir = self.repo_path / "materializations"
-        if not materializations_dir.exists():
-            logger.warning("No materializations found")
+        try:
+            # Re-initialize to ensure up-to-date config
+            self._initialize_store()
+            
+            # Load processed data to get event timestamps and keys
+            proc_path = "data/processed/processed_aqi_data.parquet"
+            if not os.path.exists(proc_path):
+                # Fallback to current directory check
+                proc_path = os.path.join("data", "processed", "processed_aqi_data.parquet")
+                
+            if not os.path.exists(proc_path):
+                logger.warning(f"Processed data file not found at {proc_path}")
+                return pd.DataFrame()
+                
+            df_proc = pd.read_parquet(proc_path)
+            if df_proc.empty:
+                logger.warning("Processed data is empty, returning empty DataFrame")
+                return pd.DataFrame()
+                
+            # Filter by lookback window
+            df_proc["timestamp"] = pd.to_datetime(df_proc["timestamp"])
+            cutoff = datetime.now() - timedelta(days=num_days)
+            df_filtered = df_proc[df_proc["timestamp"] >= cutoff].copy()
+            
+            if df_filtered.empty:
+                logger.warning(f"No records found within the last {num_days} days")
+                return pd.DataFrame()
+                
+            # Ensure 'city' column is present
+            if "city" not in df_filtered.columns:
+                df_filtered["city"] = "islamabad"
+                
+            # Build entity df for Feast historical feature retrieval
+            entity_df = pd.DataFrame({
+                "city": df_filtered["city"].astype(str),
+                "timestamp": df_filtered["timestamp"]
+            })
+            
+            # Fetch FeatureView schema to build features request list
+            fv = self.store.get_feature_view("aqi_islamabad_features")
+            features = [f"aqi_islamabad_features:{field.name}" for field in fv.schema if field.name not in fv.entities]
+            
+            logger.info(f"Calling store.get_historical_features for {len(entity_df)} entity rows...")
+            retrieval = self.store.get_historical_features(
+                entity_df=entity_df,
+                features=features
+            )
+            features_df = retrieval.to_df()
+            
+            # Sort by timestamp
+            if "timestamp" in features_df.columns:
+                features_df = features_df.sort_values("timestamp").reset_index(drop=True)
+                
+            logger.info(f"✅ Successfully retrieved {len(features_df)} rows from Feast offline store")
+            return features_df
+            
+        except Exception as e:
+            logger.warning(f"⚠️ Feast get_historical_features failed: {e}. Falling back to legacy Parquet retrieval.")
+            
+            # Fallback 1: read from custom materializations
+            materializations_dir = self.repo_path / "materializations"
+            if materializations_dir.exists():
+                dirs = sorted(materializations_dir.iterdir())
+                if dirs:
+                    latest = dirs[-1]
+                    feature_path = latest / "features.parquet"
+                    if feature_path.exists():
+                        df = pd.read_parquet(feature_path)
+                        logger.info(f"✅ Retrieved {len(df)} features from legacy materialization backup")
+                        return df
+                        
+            # Fallback 2: read directly from processed parquet
+            proc_path = "data/processed/processed_aqi_data.parquet"
+            if os.path.exists(proc_path):
+                df = pd.read_parquet(proc_path)
+                logger.info(f"✅ Retrieved {len(df)} features from direct processed parquet fallback")
+                return df
+                
             return pd.DataFrame()
-        
-        # Get most recent materialization
-        latest = sorted(materializations_dir.iterdir())[-1] if materializations_dir.iterdir() else None
-        if not latest:
-            logger.warning("No materialized features available")
-            return pd.DataFrame()
-        
-        feature_path = latest / "features.parquet"
-        if not feature_path.exists():
-            logger.warning(f"Feature file not found: {feature_path}")
-            return pd.DataFrame()
-        
-        df = pd.read_parquet(feature_path)
-        logger.info(f"✅ Retrieved {len(df)} offline features")
-        
-        return df
     
     def get_online_features(self, locations: List[str] = ["islamabad"]) -> Dict:
         """
-        Retrieve latest features for online inference.
+        Retrieve latest features for online inference from SQLite online store.
         
         Args:
             locations: Location IDs for inference
             
         Returns:
-            Dictionary with latest feature values
+            Dictionary with latest feature values: {location: {feature_name: value}}
         """
-        logger.info("🔄 Retrieving online features for inference...")
+        logger.info("🔄 Querying Feast online store for latest features...")
         
-        # In production, would query online store (Redis, DynamoDB, etc.)
-        # For now, return latest from offline store
-        df = self.get_offline_features(locations, num_days=1)
-        
-        if df.empty:
+        try:
+            # Re-initialize store
+            self._initialize_store()
+            
+            fv = self.store.get_feature_view("aqi_islamabad_features")
+            features = [f"aqi_islamabad_features:{field.name}" for field in fv.schema if field.name not in fv.entities]
+            
+            entity_rows = [{"city": loc} for loc in locations]
+            
+            logger.info(f"Calling store.get_online_features for entities {entity_rows}...")
+            response = self.store.get_online_features(
+                features=features,
+                entity_rows=entity_rows
+            )
+            
+            response_dict = response.to_dict()
+            
+            # Format output structure to match: {location: {feature_name: value}}
+            result = {}
+            for i, loc in enumerate(locations):
+                loc_features = {}
+                for key, values in response_dict.items():
+                    loc_features[key] = values[i]
+                result[loc] = loc_features
+                
+            logger.info(f"✅ Online features retrieved successfully for {locations}")
+            return result
+            
+        except Exception as e:
+            logger.warning(f"⚠️ Feast get_online_features failed: {e}. Falling back to offline dataset.")
+            
+            # Fallback to retrieving latest values from get_offline_features
+            try:
+                df = self.get_offline_features(locations, num_days=30)
+                if not df.empty:
+                    features = {}
+                    for location in locations:
+                        latest = df.iloc[-1].to_dict()
+                        features[location] = latest
+                    return features
+            except Exception as ex:
+                logger.error(f"Online fallback failed: {ex}")
+                
             return {}
-        
-        # Get latest row per location
-        features = {}
-        for location in locations:
-            latest = df.iloc[-1].to_dict()
-            features[location] = latest
-        
-        logger.info(f"✅ Retrieved online features for {len(features)} locations")
-        
-        return features
     
     def get_feature_statistics(self) -> Dict:
-        """
-        Get statistics about registered and materialized features.
-        
-        Returns:
-            Dictionary with feature statistics
-        """
+        """Get statistics about registered and materialized features."""
         stats = {
             "created_at": self.metadata["created_at"],
             "version": self.metadata["version"],
@@ -319,42 +338,33 @@ class AQIFeastStore:
         }
         
         logger.info(f"📊 Feature Store Stats: {len(stats['registered_features'])} views, {len(stats['materializations'])} materializations")
-        
         return stats
     
     def export_metadata(self, output_path: str = "feature_store_metadata.json"):
-        """
-        Export feature store metadata for audit & compliance.
-        
-        Args:
-            output_path: Path to save metadata JSON
-        """
+        """Export feature store metadata for audit & compliance."""
         with open(output_path, 'w') as f:
             json.dump(self.metadata, f, indent=2)
-        
         logger.info(f"✅ Feature store metadata exported to {output_path}")
     
     def health_check(self) -> Dict:
-        """
-        Verify feature store health and connectivity.
-        
-        Returns:
-            Dictionary with health status
-        """
+        """Verify feature store health and connectivity."""
         try:
             materializations_dir = self.repo_path / "materializations"
             num_materializations = len(list(materializations_dir.glob("*"))) if materializations_dir.exists() else 0
+            
+            # Simple Feast health query
+            self._initialize_store()
+            fvs = self.store.list_feature_views()
             
             health = {
                 "status": "healthy",
                 "store_path": str(self.repo_path),
                 "materializations": num_materializations,
-                "registered_features": len(self.metadata["features_registered"]),
+                "registered_features": len(fvs),
                 "timestamp": datetime.now().isoformat()
             }
             
             logger.info("✅ Feature Store Health: OK")
-            
             return health
         except Exception as e:
             logger.error(f"❌ Feature Store Health Check Failed: {e}")

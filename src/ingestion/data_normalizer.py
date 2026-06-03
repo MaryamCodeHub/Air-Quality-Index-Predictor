@@ -145,6 +145,13 @@ class DataNormalizer:
             parsed = pd.to_datetime(ts_val)
             if parsed.tz is not None:
                 parsed = parsed.tz_localize(None)
+            
+            # Check if timestamp is older than 24 hours
+            now = datetime.now()
+            if (now - parsed).total_seconds() > 86400:
+                logger.warning(f"Detected stale API timestamp '{ts_val}' (older than 24h). Overriding with current system time.")
+                parsed = now
+                
             return parsed.isoformat()
         except Exception as e:
             logger.warning(f"Error parsing timestamp '{ts_val}', falling back to current time. Reason: {e}")

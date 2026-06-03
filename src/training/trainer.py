@@ -3,6 +3,11 @@ Model Training Pipeline — Islamabad AQI Forecasting
 =====================================================
 Trains Ridge Regression, Random Forest, and XGBoost models
 for 24h, 48h, and 72h AQI forecasting horizons.
+
+Data flow:
+  1. PRIMARY: Feast feature store (get_features_for_training)
+  2. FALLBACK: Parquet if Feast unavailable
+  3. Training: Same models (Ridge, RF, XGBoost) on features
 """
 
 import os
@@ -17,6 +22,7 @@ from sklearn.model_selection import train_test_split
 
 from src.training.evaluator import evaluate_model
 from src.training.model_registry import ModelRegistry
+from src.feature_store.feast_integration import FeastIntegration
 from src.utils.logger import setup_logger
 
 logger = setup_logger("training.trainer")
@@ -83,19 +89,58 @@ def build_models(config: Dict[str, Any]) -> Dict[str, Any]:
 def train_all_models(config: Dict[str, Any]) -> Dict[str, Dict]:
     """
     Train all models across all forecast horizons.
+    
+    Data source priority:
+      1. Try Feast feature store (PRIMARY)
+      2. Fall back to Parquet if Feast unavailable (SECONDARY)
 
     Returns:
         results dict: {horizon: {model_name: {metrics, model, features}}}
     """
-    # Load processed data
-    proc_path = os.path.join(config["paths"]["processed_data"], "processed_aqi_data.parquet")
-    if not os.path.exists(proc_path):
-        logger.error(f"Processed data not found: {proc_path}. Run ingestion first.")
-        return {}
-
-    df = pd.read_parquet(proc_path)
+    df = None
+    data_source = None
+    
+    # ===== STEP 1: Try Feast (PRIMARY) =====
+    try:
+        logger.info("▶ Attempting to load training features from Feast (primary)...")
+        feast = FeastIntegration(repo_path="feature_store")
+        df, metadata = feast.get_features_for_training(lookback_days=30)
+        
+        if df is not None and len(df) > 0:
+            data_source = "Feast"
+            logger.info(
+                f"✅ Feast successfully loaded {len(df)} training records "
+                f"({len(df.columns)} features)"
+            )
+        else:
+            logger.warning("Feast returned empty result, attempting Parquet fallback...")
+            data_source = None
+            
+    except Exception as e:
+        logger.warning(f"⚠ Feast retrieval failed: {type(e).__name__}: {e}")
+        logger.info("ℹ Attempting Parquet fallback...")
+        data_source = None
+    
+    # ===== STEP 2: Fallback to Parquet =====
+    if df is None or len(df) == 0:
+        try:
+            logger.info("▶ Loading training features from Parquet (fallback)...")
+            proc_path = os.path.join(config["paths"]["processed_data"], "processed_aqi_data.parquet")
+            
+            if not os.path.exists(proc_path):
+                logger.error(f"Processed data not found: {proc_path}. Run ingestion first.")
+                return {}
+            
+            df = pd.read_parquet(proc_path)
+            data_source = "Parquet"
+            logger.info(f"✅ Parquet fallback successful: {len(df)} records ({len(df.columns)} features)")
+            
+        except Exception as e:
+            logger.error(f"❌ Parquet fallback also failed: {type(e).__name__}: {e}")
+            return {}
+    
+    # ===== STEP 3: Validate data =====
     min_samples = config["training"].get("min_samples_required", 50)
-
     if len(df) < min_samples:
         logger.error(
             f"Insufficient data: {len(df)} rows (need ≥{min_samples}). "
@@ -103,44 +148,7 @@ def train_all_models(config: Dict[str, Any]) -> Dict[str, Dict]:
         )
         return {}
 
-    # ----- Hopsworks Feature Store Integration -----
-    try:
-        from src.feature_store import HopsworksConnector
-        
-        connector = HopsworksConnector(config)
-        status = connector.get_feature_store_status()
-        
-        if status["connected"]:
-            logger.info("Fetching historical features from Hopsworks feature store...")
-            
-            # List of features to retrieve (corresponds to trained features)
-            feature_names = [
-                "aqi", "pm25", "pm10", "o3", "no2", "so2", "co",
-                "temperature", "humidity", "pressure", "wind_speed",
-                "hour", "day_of_week", "month", "season", "is_weekend",
-                "aqi_roll_mean_6h", "aqi_roll_mean_12h", "aqi_roll_mean_24h",
-                "aqi_lag_1h", "aqi_lag_3h", "aqi_lag_6h", "aqi_lag_12h", "aqi_lag_24h"
-            ]
-            
-            # Try to get features from Hopsworks
-            hw_df = connector.get_features(
-                feature_names=feature_names,
-                feature_group_name="aqi_features_24h",
-                version=1
-            )
-            
-            if hw_df is not None and not hw_df.empty:
-                df = hw_df
-                logger.info("✓ Successfully fetched features from Hopsworks")
-            else:
-                logger.warning("No features returned from Hopsworks, using Parquet")
-        else:
-            logger.warning(f"Hopsworks not connected: {status}. Using Parquet fallback.")
-            
-    except Exception as exc:
-        logger.warning(f"Failed to fetch features from Hopsworks: {exc}. Using Parquet fallback.")
-
-    logger.info(f"Training data loaded: {len(df)} rows")
+    logger.info(f"✅ Training data ready: {len(df)} rows from {data_source}")
 
     horizons = config["training"]["forecast_horizons"]
     test_size = config["training"]["test_size"]
@@ -214,5 +222,5 @@ def train_all_models(config: Dict[str, Any]) -> Dict[str, Dict]:
 
         all_results[horizon] = horizon_results
 
-    logger.info("\nMODEL TRAINING — COMPLETE")
+    logger.info(f"\n✅ MODEL TRAINING COMPLETE (data from {data_source})")
     return all_results

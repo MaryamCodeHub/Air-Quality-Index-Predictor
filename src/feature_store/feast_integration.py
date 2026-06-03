@@ -239,7 +239,7 @@ class FeastIntegration:
             "is_fresh": age_hours < 24 if age_hours else False
         }
     
-    def export_feature_manifest(self, output_path: str = "feature_manifest.json") -> dict:
+    def export_feature_manifest(self, output_path: str = "docs/reports/feature_manifest.json") -> dict:
         """
         Export feature manifest (registry + materialization status).
         
