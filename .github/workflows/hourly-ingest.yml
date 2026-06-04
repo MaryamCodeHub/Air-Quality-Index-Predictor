@@ -46,7 +46,9 @@ jobs:
 
       - name: Run Feast materialization
         run: |
-          python -c "from datetime import datetime, timezone; from feast import FeatureStore; store=FeatureStore(repo_path='feature_store'); store.materialize_incremental(datetime.now(timezone.utc)); print('Feast materialization complete')"
+          cd feature_store
+          feast apply
+          feast materialize-incremental $(date -u +"%Y-%m-%dT%H:%M:%S")
 
       - name: Check if sufficient data for training
         id: check_data
