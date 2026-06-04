@@ -59,7 +59,7 @@ features:
 training:
   test_size: 0.2
   random_state: 42
-  forecast_horizons: [72]          # 72h (3-day) prediction only
+  forecast_horizons: [24, 48, 72]  # 24h, 48h, 72h forecast horizons
   min_samples_required: 50
   models:
     ridge:
