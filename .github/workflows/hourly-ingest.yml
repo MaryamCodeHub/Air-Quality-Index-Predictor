@@ -44,12 +44,6 @@ jobs:
         run: |
           python pipelines/run.py features
 
-      - name: Run Feast materialization
-        run: |
-          cd feature_store
-          feast apply
-          feast materialize-incremental $(date -u +"%Y-%m-%dT%H:%M:%S")
-
       - name: Check if sufficient data for training
         id: check_data
         run: |
