@@ -4,9 +4,6 @@ on:
   schedule:
     - cron: '0 * * * *'
   workflow_dispatch:
-  push:
-    branches:
-      - master
 
 jobs:
   ingest:
@@ -66,9 +63,9 @@ jobs:
           git config user.name "GitHub Actions Bot"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          git add data/raw/raw_aqi_data.parquet data/processed/processed_aqi_data.parquet feature_store/data/feast/registry.pb feature_store/data/feast/online_store.db
+          git add data/raw/raw_aqi_data.parquet data/processed/processed_aqi_data.parquet
 
-          git commit -m "data: update AQI data and Feast store" || echo "No changes to commit"
+          git commit -m "data: AQI parquet update only" || echo "No changes to commit"
           git push origin master
 
       - name: Workflow summary
