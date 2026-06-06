@@ -297,7 +297,7 @@ Air-Quality-Index-Predictor/
 │
 ├── .github/
 │   └── workflows/
-│       └── hourly_data_ingestion.yml
+│       └── hourly_ingestion.yml
 │
 ├── artifacts/
 │   └── models/
