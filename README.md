@@ -295,6 +295,10 @@ Example:
 ```text
 Air-Quality-Index-Predictor/
 │
+├── .github/
+│   └── workflows/
+│       └── hourly_data_ingestion.yml
+│
 ├── artifacts/
 │   └── models/
 │       ├── best_24h.json
@@ -305,7 +309,10 @@ Air-Quality-Index-Predictor/
 │       ├── random_forest_72h.joblib
 │       ├── ridge_24h.joblib
 │       ├── ridge_48h.joblib
-│       └── ridge_72h.joblib
+│       ├── ridge_72h.joblib
+│       ├── xgboost_24h.joblib
+│       ├── xgboost_48h.joblib
+│       └── xgboost_72h.joblib
 │
 ├── config/
 │   └── config.yaml
@@ -319,11 +326,22 @@ Air-Quality-Index-Predictor/
 │   └── processed/
 │       └── processed_aqi_data.parquet
 │
+├── docs/
+│   ├── reports/
+│   └── archive/
+│       ├── old_reports/
+│       └── old_backups/
+│           └── models/
+│
 ├── feature_store/
 │   ├── feature_store.yaml
 │   ├── features.py
 │   └── data/
 │       └── feast/
+│
+├── pipelines/
+│   ├── run.py
+│   └── run_backfill.py
 │
 ├── plots/
 │   ├── shap_summary_24h.png
@@ -333,9 +351,9 @@ Air-Quality-Index-Predictor/
 │   ├── shap_summary_72h.png
 │   └── shap_bar_72h.png
 │
-├── pipelines/
-│   ├── run.py
-│   └── run_backfill.py
+├── scripts/
+│   ├── generate_model_report.py
+│   └── validate_pipeline.py
 │
 ├── src/
 │   ├── api/
@@ -343,13 +361,12 @@ Air-Quality-Index-Predictor/
 │   │   ├── routes.py
 │   │   └── schemas.py
 │   │
+│   ├── cleaning/
 │   ├── dashboard/
 │   │   └── app.py
 │   │
-│   ├── feature_store/
-│   │   └── feature_registry.py
-│   │
 │   ├── feature_engineering/
+│   ├── feature_store/
 │   ├── ingestion/
 │   ├── intelligence/
 │   │   ├── alerting.py
@@ -365,13 +382,15 @@ Air-Quality-Index-Predictor/
 │       ├── helpers.py
 │       └── logger.py
 │
-├── .github/
-│   └── workflows/
-│       └── hourly_data_ingestion.yml
-│
+├── tests/
 ├── requirements.txt
+├── run.py
 └── README.md
 ```
+
+> Note: The repository currently keeps both `config/config.yaml` and `configs/config.yaml` for compatibility with existing modules and workflow references. Both files are synchronized and point model artifacts to `artifacts/models`.
+
+> Archived folders under `docs/archive/` contain older reports, backup artifacts, and previous model files. The active model registry is `artifacts/models/`.
 
 ---
 
