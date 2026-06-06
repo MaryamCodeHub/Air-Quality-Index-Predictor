@@ -30,8 +30,8 @@ paths:
   processed_data: "data/processed"
   feast_data: "data/feast"
   cache: "data/cache"
-  models: "models"
-  logs: "logs"
+  models: "artifacts/models"
+  logs: "artifacts/logs"
   plots: "plots"
 
 # --- Resilience Settings ---
