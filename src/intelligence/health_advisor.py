@@ -6,7 +6,7 @@ AQI-based health recommendation system for Islamabad.
 Maps AQI values to risk levels with actionable health advice.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from src.utils.logger import setup_logger
 
@@ -47,23 +47,28 @@ class HealthAdvisor:
                 "advice": "AQI data unavailable. Exercise caution.",
             }
 
-        aqi = float(aqi)
+        aqi_value = float(aqi)
+
+        # AQI categories are defined using integer AQI ranges.
+        # Forecasts can be decimal, for example 50.8.
+        # We round only for category matching, while keeping the display value decimal.
+        aqi_for_category = round(aqi_value)
 
         for level_config in self.levels:
             lo, hi = level_config["range"]
-            if lo <= aqi <= hi:
+            if lo <= aqi_for_category <= hi:
                 advisory = {
-                    "aqi": round(aqi, 1),
+                    "aqi": round(aqi_value, 1),
                     "level": level_config["level"],
                     "color": level_config["color"],
                     "advice": level_config["advice"],
                 }
-                logger.info(f"AQI {aqi:.0f} → {advisory['level']}")
+                logger.info(f"AQI {aqi_value:.1f} → {advisory['level']}")
                 return advisory
 
         # AQI above all defined ranges
         return {
-            "aqi": round(aqi, 1),
+            "aqi": round(aqi_value, 1),
             "level": "Hazardous",
             "color": "maroon",
             "advice": "Extreme hazard: Stay indoors with air filtration.",

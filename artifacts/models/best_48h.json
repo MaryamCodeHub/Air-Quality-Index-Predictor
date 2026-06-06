@@ -1,5 +1,5 @@
 {
-  "best_model": "random_forest",
+  "best_model": "xgboost",
   "horizon": 48,
-  "selected_at": "2026-06-05T01:03:54.143305"
+  "selected_at": "2026-06-06T01:34:42.197419"
 }
