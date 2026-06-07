@@ -267,29 +267,6 @@ The Streamlit dashboard includes:
 
 ---
 
-## Dashboard Preview
-
-Add your screenshots here:
-
-```text
-docs/screenshots/dashboard.png
-docs/screenshots/forecast.png
-docs/screenshots/model_metrics.png
-docs/screenshots/shap_explainability.png
-docs/screenshots/github_actions.png
-```
-
-Example:
-
-```markdown
-![Dashboard](docs/screenshots/dashboard.png)
-![Forecast](docs/screenshots/forecast.png)
-![Model Metrics](docs/screenshots/model_metrics.png)
-![SHAP Explainability](docs/screenshots/shap_explainability.png)
-```
-
----
-
 ## Project Structure
 
 ```text
@@ -616,18 +593,7 @@ The advisory system handles decimal AQI values by using rounded values for categ
 
 SHAP is used to explain the contribution of features to model predictions.
 
-Generated plots include:
-
-```text
-shap_summary_24h.png
-shap_bar_24h.png
-shap_summary_48h.png
-shap_bar_48h.png
-shap_summary_72h.png
-shap_bar_72h.png
-```
-
-These plots help identify the most influential features for AQI forecasting, such as:
+Generated plots help identify the most influential features for AQI forecasting, such as:
 
 * Current AQI
 * PM2.5
