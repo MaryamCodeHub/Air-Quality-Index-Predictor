@@ -394,6 +394,30 @@ Air-Quality-Index-Predictor/
 
 ---
 
+## Live Deployment
+
+### Streamlit Dashboard
+
+Access the user-facing AQI prediction dashboard here:
+
+`https://air-quality-index-predictor-eb2ubkib9wehdpqxrlmxz7.streamlit.app/`
+
+### FastAPI Backend
+
+Backend API endpoint:
+
+`https://air-quality-index-predictor-fj4h.onrender.com`
+
+### API Documentation
+
+Interactive Swagger documentation is available at:
+
+`https://air-quality-index-predictor-fj4h.onrender.com/docs`
+
+The API documentation allows users and developers to explore available endpoints, inspect request/response schemas, and test API functionality directly from the browser.
+
+---
+
 ## Setup Instructions
 
 ### 1. Clone the Repository
@@ -678,8 +702,19 @@ The pipeline generates multiple feature groups:
 * Forecast quality depends on the availability and reliability of external AQI and weather APIs.
 * Some pollutant values may be missing in real-time API responses.
 * Commercial AQI providers may use different data sources, sensors, and proprietary forecasting models, so predictions may differ from external platforms.
-* Retraining from the dashboard may take longer depending on system resources.
+* Retraining from the dashboard may take longer depending on the resources.
 * The current setup uses a local Feast provider and SQLite online store, suitable for a student/internship project and local deployment.
+
+---
+
+## ## Deployment Limitation: Render Free Instance Cold Start
+
+After deploying the FastAPI backend on Render and connecting it with the Streamlit dashboard, I observed that the first API request sometimes takes longer to respond.
+This happens because the backend is hosted on a free Render instance, which may spin down after a period of inactivity. When the Streamlit dashboard sends the first request after inactivity, the backend can take some time to wake up.
+
+Initially, this caused a request timeout in the Streamlit dashboard. However, after reloading the app, the backend responded successfully and the dashboard loaded correctly. This confirmed that the API URL integration and deployment configuration were correct, and the delay was caused by Render’s free-tier cold start behavior rather than an application logic error.
+
+In a production environment, this limitation can be solved by using an always-on paid backend service, increasing the API request timeout, or moving long-running tasks such as model retraining to a background worker or scheduled pipeline.
 
 ---
 
