@@ -1,86 +1,84 @@
 name: Hourly Data Ingestion
 
 on:
-schedule:
-- cron: '0 * * * *'
-workflow_dispatch:
+  schedule:
+    - cron: '0 * * * *'
+  workflow_dispatch:
 
 jobs:
-ingest:
-runs-on: ubuntu-latest
+  ingest:
+    runs-on: ubuntu-latest
 
-```
-permissions:
-  contents: write
+    permissions:
+      contents: write
 
-steps:
-  - name: Checkout repository
-    uses: actions/checkout@v4
-    with:
-      persist-credentials: true
-      fetch-depth: 0
-
-  - name: Log workflow start time
-    run: |
-      echo "Workflow started at: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
-      echo "Event: ${{ github.event_name }}"
-
-  - name: Set up Python
-    uses: actions/setup-python@v5
-    with:
-      python-version: '3.10'
-
-  - name: Install dependencies
-    run: |
-      python -m pip install --upgrade pip
-      pip install -r requirements.txt
-
-  - name: Run real data ingestion
-    env:
-      AQICN_API_KEY: ${{ secrets.AQICN_API_KEY }}
-    run: |
-      python pipelines/run.py ingest
-
-  - name: Engineer features with Feast
-    run: |
-      python pipelines/run.py features
-
-  - name: Check if sufficient data for training
-    id: check_data
-    run: |
-      python -c "import pandas as pd, os; p='data/processed/processed_aqi_data.parquet'; rows=len(pd.read_parquet(p)) if os.path.exists(p) else 0; print(f'Found {rows} processed records'); open(os.environ['GITHUB_OUTPUT'], 'a').write(f'train={str(rows >= 50).lower()}\n')"
-
-  - name: Train models if sufficient data
-    if: steps.check_data.outputs.train == 'true'
-    run: |
-      python pipelines/run.py train
-
-  - name: Commit and push data
-    run: |
-      git config user.name "GitHub Actions Bot"
-      git config user.email "github-actions[bot]@users.noreply.github.com"
-
-      git add data/raw/raw_aqi_data.parquet data/processed/processed_aqi_data.parquet
-
-      if git diff --cached --quiet; then
-        echo "No changes to commit"
-      else
-        git commit -m "data: update AQI parquet files"
-        git push origin master
-      fi
-
-  - name: Workflow summary
-    if: always()
-    run: |
-      echo "### Data Ingestion Summary" >> $GITHUB_STEP_SUMMARY
-      echo "Timestamp: $(date -u +'%Y-%m-%d %H:%M:%S %Z')" >> $GITHUB_STEP_SUMMARY
-      echo "City: Islamabad, Pakistan" >> $GITHUB_STEP_SUMMARY
-      echo "Pipeline: API → Parquet → Feast → Training" >> $GITHUB_STEP_SUMMARY
-
-      if [ -f data/processed/processed_aqi_data.parquet ]; then
-        ROWS=$(python -c "import pandas as pd; print(len(pd.read_parquet('data/processed/processed_aqi_data.parquet')))")
-        echo "Processed records: $ROWS" >> $GITHUB_STEP_SUMMARY
-      else
-        echo "Processed records: 0" >> $GITHUB_STEP_SUMMARY
-      fi
-```
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        persist-credentials: true
+        fetch-depth: 0
+  
+    - name: Log workflow start time
+      run: |
+        echo "Workflow started at: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+        echo "Event: ${{ github.event_name }}"
+  
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+  
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+  
+    - name: Run real data ingestion
+      env:
+        AQICN_API_KEY: ${{ secrets.AQICN_API_KEY }}
+      run: |
+        python pipelines/run.py ingest
+  
+    - name: Engineer features with Feast
+      run: |
+        python pipelines/run.py features
+  
+    - name: Check if sufficient data for training
+      id: check_data
+      run: |
+        python -c "import pandas as pd, os; p='data/processed/processed_aqi_data.parquet'; rows=len(pd.read_parquet(p)) if os.path.exists(p) else 0; print(f'Found {rows} processed records'); open(os.environ['GITHUB_OUTPUT'], 'a').write(f'train={str(rows >= 50).lower()}\n')"
+  
+    - name: Train models if sufficient data
+      if: steps.check_data.outputs.train == 'true'
+      run: |
+        python pipelines/run.py train
+  
+    - name: Commit and push data
+      run: |
+        git config user.name "GitHub Actions Bot"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+  
+        git add data/raw/raw_aqi_data.parquet data/processed/processed_aqi_data.parquet
+  
+        if git diff --cached --quiet; then
+          echo "No changes to commit"
+        else
+          git commit -m "data: update AQI parquet files"
+          git push origin master
+        fi
+  
+    - name: Workflow summary
+      if: always()
+      run: |
+        echo "### Data Ingestion Summary" >> $GITHUB_STEP_SUMMARY
+        echo "Timestamp: $(date -u +'%Y-%m-%d %H:%M:%S %Z')" >> $GITHUB_STEP_SUMMARY
+        echo "City: Islamabad, Pakistan" >> $GITHUB_STEP_SUMMARY
+        echo "Pipeline: API → Parquet → Feast → Training" >> $GITHUB_STEP_SUMMARY
+  
+        if [ -f data/processed/processed_aqi_data.parquet ]; then
+          ROWS=$(python -c "import pandas as pd; print(len(pd.read_parquet('data/processed/processed_aqi_data.parquet')))")
+          echo "Processed records: $ROWS" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "Processed records: 0" >> $GITHUB_STEP_SUMMARY
+        fi
