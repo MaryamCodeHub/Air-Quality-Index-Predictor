@@ -198,7 +198,7 @@ def format_datetime(value: Any) -> str:
 def api_get(endpoint: str):
     """Safely make a GET request to the FastAPI serving layer."""
     try:
-        resp = requests.get(f"{API_BASE_URL}/{endpoint}", timeout=10)
+        resp = requests.get(f"{API_BASE_URL}/{endpoint}", timeout=60)
         if resp.status_code == 200:
             return resp.json()
         if resp.status_code == 404:
@@ -223,7 +223,7 @@ def api_post(endpoint: str, json_data: dict = None):
     """Safely make a POST request to the FastAPI serving layer."""
     try:
         # Retraining takes longer than normal prediction requests.
-        timeout_seconds = 180 if endpoint == "retrain" else 30
+        timeout_seconds = 180 if endpoint == "retrain" else 60
 
         resp = requests.post(
             f"{API_BASE_URL}/{endpoint}",
@@ -340,17 +340,15 @@ if section == "Dashboard":
         unsafe_allow_html=True,
     )
 
-    advisory_data = api_get("health-advice")
+    current_data = api_get("current")
     raw_df, _ = fetch_history_dfs()
 
-    if advisory_data and not raw_df.empty:
-        latest = raw_df.iloc[-1]
-
+    if current_data:
         cols = st.columns(4)
 
         with cols[0]:
-            css = get_aqi_css_class(advisory_data.get("level", "Good"))
-            current_aqi = format_number(advisory_data.get("current_aqi"), decimals=1)
+            css = get_aqi_css_class(current_data.get("category", "Good"))
+            current_aqi = format_number(current_data.get("current_aqi"), decimals=1)
             st.markdown(
                 f"""
                 <div class="metric-card {css}">
@@ -362,15 +360,24 @@ if section == "Dashboard":
             )
 
         with cols[1]:
-            st.metric("Temperature", f"{format_number(latest.get('temperature'), 1)}°C")
+            st.metric("Temperature", f"{format_number(current_data.get('temperature'), 1)}°C")
 
         with cols[2]:
-            st.metric("Humidity", f"{format_number(latest.get('humidity'), 1)}%")
+            st.metric("Humidity", f"{format_number(current_data.get('humidity'), 1)}%")
 
         with cols[3]:
-            st.metric("Wind Speed", f"{format_number(latest.get('wind_speed'), 1)} m/s")
+            st.metric("Wind Speed", f"{format_number(current_data.get('wind_speed'), 1)} m/s")
 
-        st.info(f"**{advisory_data.get('level')}**: {advisory_data.get('advice')}")
+        st.caption(
+            f"Source: {current_data.get('aqi_source', 'AQICN')} + "
+            f"{current_data.get('weather_source', 'Open-Meteo')}"
+        )
+        st.caption(f"Last updated: {format_datetime(current_data.get('last_updated'))}")
+
+        if current_data.get("is_stale"):
+            st.warning("AQI data may be stale. Latest live fetch failed.")
+
+        st.info(f"**{current_data.get('category', 'Unknown')}**")
 
         # AQI History chart
         if "timestamp" in raw_df.columns and "aqi" in raw_df.columns:

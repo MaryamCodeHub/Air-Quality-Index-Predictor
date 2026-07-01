@@ -33,6 +33,19 @@ class DriftResponse(BaseModel):
     timestamp: str
 
 
+class CurrentResponse(BaseModel):
+    location: str
+    current_aqi: Optional[float]
+    category: str
+    temperature: Optional[float]
+    humidity: Optional[float]
+    wind_speed: Optional[float]
+    aqi_source: str
+    weather_source: str
+    last_updated: str
+    is_stale: bool
+
+
 class HealthAdviceResponse(BaseModel):
     city: str = "Islamabad"
     current_aqi: Optional[float]

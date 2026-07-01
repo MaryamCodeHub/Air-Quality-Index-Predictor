@@ -264,6 +264,64 @@ def test_health_advice_valid_levels(client, test_processed_data):
 
 
 # ============================================================
+# Test 4b: Current Conditions Endpoint
+# ============================================================
+
+def test_current_endpoint_uses_live_sources(client, monkeypatch):
+    """Test GET /api/v1/current uses AQICN AQI and Open-Meteo weather payloads."""
+    from src.api import routes
+
+    class MockResponse:
+        def __init__(self, payload):
+            self._payload = payload
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return self._payload
+
+    def mock_get(url, params=None, timeout=None):
+        if "api.waqi.info" in url:
+            return MockResponse(
+                {
+                    "status": "ok",
+                    "data": {
+                        "aqi": 137,
+                        "time": {"iso": "2026-07-01T10:00:00+05:00"},
+                    },
+                }
+            )
+
+        return MockResponse(
+            {
+                "current": {
+                    "temperature_2m": 31.2,
+                    "relative_humidity_2m": 45,
+                    "wind_speed_10m": 3.4,
+                }
+            }
+        )
+
+    monkeypatch.setitem(routes.CONFIG["api"]["aqicn"], "api_key", "test-token")
+    monkeypatch.setattr(routes.requests, "get", mock_get)
+
+    response = client.get("/api/v1/current")
+    assert response.status_code == 200
+    data = response.json()
+
+    assert data["location"] == "Islamabad, Pakistan"
+    assert data["current_aqi"] == 137.0
+    assert data["category"] == "Unhealthy for Sensitive Groups"
+    assert data["temperature"] == 31.2
+    assert data["humidity"] == 45.0
+    assert data["wind_speed"] == 3.4
+    assert data["aqi_source"] == "AQICN"
+    assert data["weather_source"] == "Open-Meteo"
+    assert isinstance(data["is_stale"], bool)
+
+
+# ============================================================
 # Test 5: Drift Status Endpoint
 # ============================================================
 
